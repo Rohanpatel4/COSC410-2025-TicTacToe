@@ -1,0 +1,185 @@
+:root {
+    --outer-size: 900px;   /* overall square area */
+    --big-scale: 2.25;      /* scale for the big background board */
+  
+    --inset: 64px;         /* padding between big board edge and the mini grid */
+    --gap: 37px;           /* spacing between mini boards (both axes) */
+    --mini-scale: .95;    /* scale the whole mini grid proportionally */
+    --offset-y: 0px;      /* push the mini grid down a bit */
+  
+    --pull: -16px;         /* cancels TicTacToe's internal p-4 (pulls minis closer) */
+    --divider: 12px;
+    /* status typography knobs */
+   
+  }
+  
+  /* page wrapper */
+  .app {
+    display: flex;
+    flex-direction: column;   /* stack status + board vertically */
+    align-items: center;      /* center children horizontally */
+    padding: 24px;
+  
+    transform: scale(0.8);
+    transform-origin: top center;
+  }
+  
+  /* fixed square for the composition */
+  .outer {
+    position: relative;
+    width: var(--outer-size);
+    height: var(--outer-size);
+    margin-bottom: 6px;             /* creates room for the button below */
+  }
+  
+  /* big board as background (visible, not clickable) */
+  .big {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;            /* <- FIX: make background not clickable */
+  }
+  
+  .bigScale {
+    transform: scale(var(--big-scale));
+    transform-origin: top;
+  }
+  
+  /* 3×3 mini grid */
+  .inner {
+    position: absolute;
+    left: var(--inset);
+    right: var(--inset);
+    top: calc(var(--inset) + var(--offset-y));
+    bottom: var(--inset);
+  
+    display: grid;
+    justify-content: center;
+    grid-template-columns: repeat(3, max-content);
+    column-gap: var(--gap);
+    row-gap: var(--gap);
+  
+    transform: scale(var(--mini-scale));
+    transform-origin: top center;
+  }
+  
+  /* wrapper around each <TicTacToe /> mini */
+  .cell {
+    position: relative;       /* needed for overlays if you add them later */
+    aspect-ratio: 1 / 1;
+    margin: var(--pull);
+  }
+  
+  /* status text (centered, easy to restyle via variables) */
+  .statusBar {
+    display: block;
+    width: var(--outer-size);   /* same width as the board */
+    margin: 12px auto;          /* centers the block */
+    text-align: center;
+  
+    font-size: 2rem;            /* bigger */
+    font-weight: 700;           /* bold */
+    font-family: Arial, sans-serif;
+  }
+  
+  
+  /* controls are above absolute layers inside .outer */
+  .controls {
+    position: relative;
+    z-index: 50;
+    pointer-events: auto;
+  }
+  
+  /* pin the New Game button under the board */
+  .controlsBottom {
+    position: absolute;
+    left: 50%;
+    bottom: -48px;            /* distance below the board; tweak as needed */
+    transform: translateX(-50%);
+  }
+  
+
+
+  .inner button[aria-label^="cell-"] {
+    border: 2px solid #e5e7eb !important;  /* force light gray */
+    background-color: #fff;
+    color: #000;
+    transition: border-color 120ms ease, border-width 120ms ease;
+  }
+  
+  /* Active mini board: MUCH darker/thicker lines */
+  .inner .cell--active button[aria-label^="cell-"] {
+    border: 4px solid #000 !important;  /* thick black borders */
+  }
+
+
+
+  .inner .cell { box-sizing: border-box; }
+
+  .inner {
+    /* keep your existing properties here ... */
+    position: absolute;
+    left: var(--inset);
+    right: var(--inset);
+    top: calc(var(--inset) + var(--offset-y));
+    bottom: var(--inset);
+    display: grid;
+    justify-content: center;
+    grid-template-columns: repeat(3, max-content);
+    column-gap: var(--gap);
+    row-gap: var(--gap);
+    transform: scale(var(--mini-scale));
+    transform-origin: top center;
+  
+    /* NEW: four background layers = two vertical + two horizontal lines */
+    background:
+    linear-gradient(#000, #000) no-repeat,  /* vertical @ between col 0–1 */
+    linear-gradient(#000, #000) no-repeat,  /* vertical @ between col 1–2 */
+    linear-gradient(#000, #000) no-repeat,  /* horizontal @ between row 0–1 */
+    linear-gradient(#000, #000) no-repeat;  /* horizontal @ between row 1–2 */
+
+  background-size:
+    var(--divider) 100%,
+    var(--divider) 100%,
+    100% var(--divider),
+    100% var(--divider);
+
+  /* ✅ positions are centered in the gaps */
+  background-position:
+    /* V1 */ calc( ((100% - 2*var(--gap)) / 3) + (var(--gap) / 2) ) 0,
+    /* V2 */ calc( (2*(100% - 2*var(--gap)) / 3) + (3*var(--gap) / 2) ) 0,
+    /* H1 */ 0 calc( ((100% - 2*var(--gap)) / 3) + (var(--gap) / 2) ),
+    /* H2 */ 0 calc( (2*(100% - 2*var(--gap)) / 3) + (3*var(--gap) / 2) );
+}
+  
+.cell--won {
+    position: relative;
+  }
+  
+  .miniWinner {
+    position: absolute;
+    inset: 0;                      /* cover the whole mini board */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 900;
+    line-height: 1;
+    /* Big, but responsive across scales */
+    font-size: clamp(4rem, 12vw, 160px);
+    color: #000;
+    background: transparent;
+    pointer-events: none;          /* ignore clicks on the marker */
+    border-radius: 12px;           /* match your mini board rounding if desired */
+  }
+  
+  /* Optional: tone down any grid/border styling for won boards */
+  .cell--won button[aria-label^="cell-"] {
+    display: none;                 /* hide any cells if still present */
+  }
+  
+  /* If your wrapper border shows, you can remove it on won boards */
+  .cell--won { border: none; }
+
+  .big button[aria-label^="cell-"] {
+    color: transparent !important;  /* hide the glyph */
+    font-size: 0 !important;        /* beat Tailwind text-3xl */
+  }

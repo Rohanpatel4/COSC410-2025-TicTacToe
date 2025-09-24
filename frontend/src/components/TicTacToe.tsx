@@ -1,17 +1,29 @@
 import React from "react";
 
-type Player = "X" | "O";
+type Player = "X" | "O" | "-";
 type Cell = Player | null;
 
 type Props = {
   onWin?: (winner: Player | "draw" | null) => void;
+  getPlayer?: () => Player;        // ask parent whose turn it is
+  onPlayed?: (p: Player) => void;
+  boardId?: number; // 0..8 for mini boards
+  onCell?: (e: {
+    boardId: number;
+    gameId: string;
+    cellIndex: number;
+    player: Player;
+    stillPlaying: boolean;
+  }) => void;
+  boardDisabled?: boolean; // ← NEW: when true, this whole board can't be played
+  externalMove?: { index: number; player: Player; trigger: number };
 };
 
 // ----- Backend DTOs -----
 type GameStateDTO = {
   id: string;
   board: Cell[];
-  current_player: Player;
+  current_player: Player | null;
   winner: Player | null;
   is_draw: boolean;
   status: string;
@@ -24,7 +36,7 @@ const API_BASE =
 
 
 
-export default function TicTacToe({ onWin }: Props) {
+  export default function TicTacToe({ onWin, getPlayer, onPlayed, boardId, onCell, boardDisabled, externalMove}: Props) {
   const [state, setState] = React.useState<GameStateDTO | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -49,6 +61,36 @@ export default function TicTacToe({ onWin }: Props) {
       canceled = true;
     };
   }, []);
+  React.useEffect(() => {
+    if (!state || !externalMove) return;
+    const { index, player } = externalMove;
+  
+    // Ignore if game ended or target cell is already taken
+    if (state.winner || state.is_draw || state.board[index] !== null) return;
+  
+    (async () => {
+      try {
+        setLoading(true);
+        const next = await playMove(index, player); // same backend path you use for clicks
+        setState(next);
+        onPlayed?.(player);
+        if (onCell && boardId !== undefined) {
+          onCell({
+            boardId,
+            gameId: next.id,
+            cellIndex: index,
+            player,
+            stillPlaying: !next.winner && !next.is_draw,
+          });
+        }
+      } catch (e: any) {
+        setError(e?.message ?? "Injected move failed");
+      } finally {
+        setLoading(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalMove?.trigger]);
 
   // Notify parent when result changes
   React.useEffect(() => {
@@ -61,18 +103,18 @@ export default function TicTacToe({ onWin }: Props) {
     const r = await fetch(`${API_BASE}/tictactoe/new`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ starting_player: "X" }),
+      body: JSON.stringify({}),
     });
     if (!r.ok) throw new Error(`Create failed: ${r.status}`);
     return r.json();
   }
 
-  async function playMove(index: number): Promise<GameStateDTO> {
+  async function playMove(index: number, player: Player): Promise<GameStateDTO> {
     if (!state) throw new Error("No game");
     const r = await fetch(`${API_BASE}/tictactoe/${state.id}/move`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ index }),
+      body: JSON.stringify({ index, player }),   
     });
     if (!r.ok) {
       const detail = await r.json().catch(() => ({}));
@@ -82,15 +124,26 @@ export default function TicTacToe({ onWin }: Props) {
   }
 
   async function handleClick(i: number) {
-    if (!state || loading) return;
+    if (!state || loading || boardDisabled) return; // ← NEW
     // Light client-side guard to avoid noisy 400s:
     if (state.winner || state.is_draw || state.board[i] !== null) return;
 
     setLoading(true);
     setError(null);
     try {
-      const next = await playMove(i);
+      const p: Player = getPlayer ? getPlayer() : "X"; 
+      const next = await playMove(i, p);               
       setState(next);
+      onPlayed?.(p);
+      if (onCell && boardId !== undefined) {
+             onCell({
+               boardId,
+               gameId: next.id,
+               cellIndex: i,
+               player: p,
+               stillPlaying: !next.winner && !next.is_draw,
+             });
+           }
     } catch (e: any) {
       setError(e?.message ?? "Move failed");
     } finally {
@@ -98,26 +151,23 @@ export default function TicTacToe({ onWin }: Props) {
     }
   }
 
-  async function reset() {
-    setLoading(true);
-    setError(null);
-    try {
-      const gs = await createGame();
-      setState(gs);
-    } catch (e: any) {
-      setError(e?.message ?? "Failed to reset");
-    } finally {
-      setLoading(false);
-    }
-  }
+  // async function reset() {
+  //   setLoading(true);
+  //   setError(null);
+  //   try {
+  //     const gs = await createGame();
+  //     setState(gs);
+  //   } catch (e: any) {
+  //     setError(e?.message ?? "Failed to reset");
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // }
 
   if (error) {
     return (
       <div className="max-w-sm mx-auto p-4">
         <div className="mb-2 text-red-600 font-semibold">Error: {error}</div>
-        <button className="rounded-2xl px-4 py-2 border" onClick={reset}>
-          Retry
-        </button>
       </div>
     );
   }
@@ -133,25 +183,19 @@ export default function TicTacToe({ onWin }: Props) {
   const { board, status } = state;
 
   return (
-    <div className="max-w-sm mx-auto p-4">
-      <div className="text-center mb-2 text-xl font-semibold">{status}</div>
+    <div className="max-w-sm mx-auto p-4"> 
       <div className="grid grid-cols-3 gap-2">
         {board.map((c, i) => (
           <button
             key={i}
-            className="aspect-square rounded-2xl border text-3xl font-bold flex items-center justify-center disabled:opacity-50"
+            className="aspect-square rounded-2xl text-3xl font-bold flex items-center justify-center disabled:opacity-50"
             onClick={() => handleClick(i)}
             aria-label={`cell-${i}`}
-            disabled={loading || c !== null || state.winner !== null || state.is_draw}
+            disabled={loading || c !== null || boardDisabled || state.winner !== null || state.is_draw}
           >
             {c}
           </button>
         ))}
-      </div>
-      <div className="text-center mt-3">
-        <button className="rounded-2xl px-4 py-2 border" onClick={reset} disabled={loading}>
-          New Game
-        </button>
       </div>
     </div>
   );

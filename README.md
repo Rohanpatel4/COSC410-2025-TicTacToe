@@ -50,6 +50,8 @@ uv run nox -s lint typecheck tests
 cd ../frontend
 pnpm test
 
+#coverage
+
 # E2E (requires the stack running, e.g., docker compose up)
 pnpm exec playwright install
 pnpm e2e
