@@ -1,6 +1,5 @@
 :root {
     --outer-size: 900px;   /* overall square area */
-    --big-scale: 2.25;      /* scale for the big background board */
   
     --inset: 64px;         /* padding between big board edge and the mini grid */
     --gap: 37px;           /* spacing between mini boards (both axes) */
@@ -30,36 +29,6 @@
     width: var(--outer-size);
     height: var(--outer-size);
     margin-bottom: 6px;             /* creates room for the button below */
-  }
-  
-  /* big board as background (visible, not clickable) */
-  .big {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;            /* <- FIX: make background not clickable */
-  }
-  
-  .bigScale {
-    transform: scale(var(--big-scale));
-    transform-origin: top;
-  }
-  
-  /* 3×3 mini grid */
-  .inner {
-    position: absolute;
-    left: var(--inset);
-    right: var(--inset);
-    top: calc(var(--inset) + var(--offset-y));
-    bottom: var(--inset);
-  
-    display: grid;
-    justify-content: center;
-    grid-template-columns: repeat(3, max-content);
-    column-gap: var(--gap);
-    row-gap: var(--gap);
-  
-    transform: scale(var(--mini-scale));
-    transform-origin: top center;
   }
   
   /* wrapper around each <TicTacToe /> mini */
@@ -179,7 +148,3 @@
   /* If your wrapper border shows, you can remove it on won boards */
   .cell--won { border: none; }
 
-  .big button[aria-label^="cell-"] {
-    color: transparent !important;  /* hide the glyph */
-    font-size: 0 !important;        /* beat Tailwind text-3xl */
-  }

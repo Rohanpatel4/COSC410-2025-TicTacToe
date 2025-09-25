@@ -1,6 +1,6 @@
 import pytest
 
-from app.tictactoe.engine import available_moves, move, new_game
+from app.tictactoe.engine import available_moves, move, new_game, status
 
 # uv run pytest to test the test cases
 
@@ -103,3 +103,47 @@ def test_cannot_override_with_dash():
     gs = move(gs, 0, "X")
     with pytest.raises(ValueError):
         move(gs, 0, "-")
+
+
+def test_dash_places_and_does_not_end_game():
+    gs = new_game()
+    gs = move(gs, 0, "-")  # place a dash at cell 0
+    assert gs.board[0] == "-"
+    assert gs.winner is None
+    assert gs.is_draw is False
+    assert status(gs) == "in progress"
+
+
+def test_dash_three_in_a_row_is_not_a_win():
+    gs = new_game()
+    # Put "-" across the top row: 0,1,2
+    gs = move(gs, 0, "-")
+    gs = move(gs, 1, "-")
+    gs = move(gs, 2, "-")
+    # Even with three dashes in a row, winner must remain None
+    assert gs.winner is None
+    assert gs.is_draw is False
+    assert status(gs) == "in progress"
+
+
+def test_draw_counts_with_dashes_on_board():
+    gs = new_game()
+    # Fill the board with X/O/'-' so there is no X/O 3-in-a-row,
+    # but the board is full -> should be a draw.
+    seq = [
+        (0, "X"),
+        (1, "O"),
+        (2, "-"),
+        (3, "-"),
+        (4, "O"),
+        (5, "X"),
+        (6, "O"),
+        (7, "X"),
+        (8, "-"),
+    ]
+    for idx, p in seq:
+        gs = move(gs, idx, p)
+
+    assert gs.is_draw is True
+    assert gs.winner is None
+    assert status(gs) == "draw"

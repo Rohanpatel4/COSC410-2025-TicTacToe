@@ -14,7 +14,6 @@ class GameCreate(BaseModel):
 class GameStateDTO(BaseModel):
     id: str
     board: list[Player | None]
-    current_player: Player | None = None
     winner: Player | None
     is_draw: bool
     status: str

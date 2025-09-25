@@ -1,6 +1,6 @@
 import React from "react";
 
-type Player = "X" | "O" | "-";
+type Player = "X" | "O" ;
 type Cell = Player | null;
 
 type Props = {
@@ -16,14 +16,12 @@ type Props = {
     stillPlaying: boolean;
   }) => void;
   boardDisabled?: boolean; // ← NEW: when true, this whole board can't be played
-  externalMove?: { index: number; player: Player; trigger: number };
 };
 
 // ----- Backend DTOs -----
 type GameStateDTO = {
   id: string;
   board: Cell[];
-  current_player: Player | null;
   winner: Player | null;
   is_draw: boolean;
   status: string;
@@ -36,7 +34,7 @@ const API_BASE =
 
 
 
-  export default function TicTacToe({ onWin, getPlayer, onPlayed, boardId, onCell, boardDisabled, externalMove}: Props) {
+  export default function TicTacToe({ onWin, getPlayer, onPlayed, boardId, onCell, boardDisabled}: Props) {
   const [state, setState] = React.useState<GameStateDTO | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -61,36 +59,6 @@ const API_BASE =
       canceled = true;
     };
   }, []);
-  React.useEffect(() => {
-    if (!state || !externalMove) return;
-    const { index, player } = externalMove;
-  
-    // Ignore if game ended or target cell is already taken
-    if (state.winner || state.is_draw || state.board[index] !== null) return;
-  
-    (async () => {
-      try {
-        setLoading(true);
-        const next = await playMove(index, player); // same backend path you use for clicks
-        setState(next);
-        onPlayed?.(player);
-        if (onCell && boardId !== undefined) {
-          onCell({
-            boardId,
-            gameId: next.id,
-            cellIndex: index,
-            player,
-            stillPlaying: !next.winner && !next.is_draw,
-          });
-        }
-      } catch (e: any) {
-        setError(e?.message ?? "Injected move failed");
-      } finally {
-        setLoading(false);
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [externalMove?.trigger]);
 
   // Notify parent when result changes
   React.useEffect(() => {
@@ -150,19 +118,6 @@ const API_BASE =
       setLoading(false);
     }
   }
-
-  // async function reset() {
-  //   setLoading(true);
-  //   setError(null);
-  //   try {
-  //     const gs = await createGame();
-  //     setState(gs);
-  //   } catch (e: any) {
-  //     setError(e?.message ?? "Failed to reset");
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // }
 
   if (error) {
     return (

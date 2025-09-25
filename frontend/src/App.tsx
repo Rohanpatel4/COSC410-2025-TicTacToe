@@ -2,71 +2,126 @@ import TicTacToe from "@/components/TicTacToe";
 import React from "react";
 import "./App.css";
 
-type Player = "X" | "O" | "-";
+const API_BASE =
+  (import.meta as any)?.env?.VITE_API_URL?.replace(/\/$/, "") ??
+  "http://localhost:8000";
 
+type MiniPlayer = "X" | "O"; 
+type BigPlayer  = "X" | "O" | "-";
+
+type BigDTO = { winner: "X" | "O" | null; is_draw: boolean };
 type MoveEvent = {
   boardId: number;        // 0..8 (which mini board)
   gameId: string;         // backend game id of that mini board
   cellIndex: number;      // 0..8 (which cell inside that board)
-  player: Player;         // "X" or "O"
+  player: MiniPlayer;         // "X" or "O"
   stillPlaying: boolean;  // true if not won/draw after the move
 };
 
 export default function App() {
   
-  const [nextPlayer, setNextPlayer] = React.useState<Player>("X");
+  const [nextPlayer, setNextPlayer] = React.useState<MiniPlayer>("X");
   const [activeBoard, setActiveBoard] = React.useState<number | null>(null);
   const [finished, setFinished] = React.useState<Set<number>>(new Set());
-  const [winners, setWinners] = React.useState<Record<number, Player | "draw" | undefined>>({});
+  const [winners, setWinners] = React.useState<Record<number, MiniPlayer | "draw" | undefined>>({});
   const [resetSeed, setResetSeed] = React.useState(0);
   const [bigResult, setBigResult] = React.useState<"X" | "O" | "draw" | null>(null);
-  const [bigTrigger, setBigTrigger] = React.useState(0);
-  const [bigMove, setBigMove] = React.useState<{index:number; player:Player; trigger:number}>();
+  const [bigGameId, setBigGameId] = React.useState<string | null>(null);
     
-  
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(`${API_BASE}/tictactoe/new`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        if (!r.ok) throw new Error(`Create failed: ${r.status}`);
+        const gs = await r.json();
+        if (!cancelled) setBigGameId(gs.id);
+      } catch (e) {
+        console.error("Big game init failed", e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Report a finished mini-board to the big game
+  async function reportMiniResult(miniIndex: number, winner: BigPlayer | "draw") {
+    if (!bigGameId) return null;
+    const p: BigPlayer = winner === "draw" ? "-" : (winner as MiniPlayer);
+    try {
+      const r = await fetch(`${API_BASE}/tictactoe/${bigGameId}/move`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ index: miniIndex, player: p }),
+      });
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        throw new Error(d?.detail ?? `Big move failed: ${r.status}`);
+      }
+      const next: BigDTO = await r.json();
+      if (next.winner) setBigResult(next.winner);
+      else if (next.is_draw) setBigResult("draw");
+      return next;
+    } catch (e) {
+      console.error(e);
+      return null;
+    }
+  }
+  async function createBigGame() {
+    try {
+      const r = await fetch(`${API_BASE}/tictactoe/new`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!r.ok) throw new Error(`Create failed: ${r.status}`);
+      const gs = await r.json();
+      setBigGameId(gs.id);
+    } catch (e) {
+      console.error("Big game init failed", e);
+      setBigGameId(null);
+    }
+  }
   const newGame = () => {
-    // Force all 10 boards to remount (each board calls /new on mount)
     setResetSeed((s) => s + 1);
-    // Reset meta state
     setNextPlayer("X");
     setActiveBoard(null);
     setFinished(new Set());
     setWinners({});
     setBigResult(null);
-    setBigMove(undefined);
-    setBigTrigger(0); 
+    createBigGame(); // ← ensure a fresh big game id
   };
 
-  const getPlayer = () => nextPlayer;
-  const handlePlayed = (p: Player) => setNextPlayer(p === "X" ? "O" : "X");
+  const getPlayer: () => MiniPlayer = () => nextPlayer;
+  const handlePlayed = (p: MiniPlayer) => setNextPlayer(p === "X" ? "O" : "X");
   const handleMiniCell = (e: MoveEvent) => {
     setFinished(prev => {
       const next = new Set(prev);
-      if (!e.stillPlaying) {
-        next.add(e.boardId); // the mini board just ended (win or draw)
-      }
   
-      const nextTarget = e.cellIndex; // where the last move points to
-      setActiveBoard(next.has(nextTarget) ? null : nextTarget); // null = free choice
+      // if that mini just ended (win or draw), mark it finished
+      if (!e.stillPlaying) next.add(e.boardId);
+  
+      // next active mini is where the last move landed,
+      // unless that target mini is already finished → free choice (null)
+      const nextTarget = e.cellIndex;
+      setActiveBoard(next.has(nextTarget) ? null : nextTarget);
   
       return next;
     });
   };
-  const handleMiniWin = (i: number) => (w: Player | "draw" | null) => {
+  const handleMiniWin = (i: number) => (w: MiniPlayer | "draw" | null) => {
     if (!w) return;
   
     // record who took that mini board (X | O | "draw")
     setWinners(prev => ({ ...prev, [i]: w }));
-
-    const t = bigTrigger + 1;
-    setBigTrigger(t);
   
-    if (w === "X" || w === "O") {
-      setBigMove({ index: i, player: w, trigger: t });
-    } else if (w === "draw") {
-      // send "-" to the big board/back end to mark the cell as taken but unwinnable
-      setBigMove({ index: i, player: "-", trigger: t });
-    }
+    // report to backend big game and possibly end the match
+    reportMiniResult(i, w);
   };
   const headerText =
     bigResult === "draw"
@@ -91,21 +146,6 @@ export default function App() {
     <div className="app">
       <div className="statusBar">{headerText}</div>
       <div className="outer">
-        {/* Big board (visible header/button; not clickable) */}
-        <div className="big">
-          <div className="bigScale">
-            <TicTacToe
-              key={`big-${resetSeed}`}
-              onWin={(w) => {
-                if (w === "-") return;  // optional safety no-op
-                setBigResult(w);        // "X" | "O" | "draw" | null
-              }}
-              boardDisabled={true}             // ← disable clicking on the big board
-              externalMove={bigMove}
-            />
-          </div>
-        </div>
-
         {/* 9 mini boards */}
         <div className="inner">
           {Array.from({ length: 9 }).map((_, i) => {
